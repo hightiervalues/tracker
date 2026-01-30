@@ -3,43 +3,57 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Choose Your Path</title>
+  <title>Habit Tracker</title>
   <link rel="stylesheet" href="style.css" />
-  <meta name="description" content="An interactive choose-your-path story." />
+  <meta name="description" content="A simple habit tracker that saves locally." />
 </head>
 <body>
   <div class="wrap">
     <header class="top">
       <div>
-        <h1>Choose Your Path</h1>
-        <p class="sub">An interactive story you can host on GitHub Pages.</p>
+        <h1>Habit Tracker</h1>
+        <p class="sub">Track daily habits • streaks • 7-day view • saves automatically</p>
       </div>
-
       <div class="controls">
-        <button id="restartBtn" class="btn secondary" type="button">Restart</button>
-        <button id="shareBtn" class="btn secondary" type="button">Copy Link</button>
+        <button id="exportBtn" class="btn secondary" type="button">Export</button>
+        <button id="importBtn" class="btn secondary" type="button">Import</button>
+        <button id="resetBtn" class="btn danger" type="button">Reset</button>
       </div>
     </header>
 
-    <main class="card" aria-live="polite">
-      <div class="meta">
-        <span id="chapterPill" class="pill">Chapter</span>
-        <span id="progressText" class="muted">0 choices made</span>
-      </div>
+    <main class="grid">
+      <section class="card">
+        <div class="row">
+          <h2 class="h2">Today</h2>
+          <div class="pill" id="todayPill">—</div>
+        </div>
+        <p class="muted" id="todayHint">Check off habits for today. Your streak updates automatically.</p>
 
-      <h2 id="title" class="title">Loading…</h2>
-      <p id="text" class="text"></p>
+        <div id="todayList" class="list"></div>
 
-      <div id="choices" class="choices" role="list"></div>
+        <div class="divider"></div>
 
-      <div class="footer">
-        <span id="hint" class="muted">Tip: your progress is saved automatically.</span>
-      </div>
+        <form id="addForm" class="add">
+          <input id="habitName" class="input" placeholder="Add a habit (e.g., Drink water)" maxlength="40" />
+          <button class="btn primary" type="submit">Add</button>
+        </form>
+        <p class="tiny muted">Tip: click a habit name to rename. Use the ⋯ menu to delete.</p>
+      </section>
+
+      <section class="card">
+        <div class="row">
+          <h2 class="h2">7-day view</h2>
+          <div class="pill" id="scorePill">—</div>
+        </div>
+        <div id="weekTable" class="week"></div>
+      </section>
     </main>
 
     <footer class="bottom muted">
-      Built with plain HTML/CSS/JS • Host on GitHub Pages
+      Built with plain HTML/CSS/JS • Works on GitHub Pages • Data stored in your browser (localStorage)
     </footer>
+
+    <input id="fileInput" type="file" accept="application/json" hidden />
   </div>
 
   <script src="script.js"></script>
