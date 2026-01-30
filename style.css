@@ -1,133 +1,315 @@
-:root{
-  --bg: #0b0e14;
-  --card: #111827;
-  --muted: rgba(255,255,255,.68);
-  --text: rgba(255,255,255,.92);
-  --border: rgba(255,255,255,.10);
-  --shadow: 0 16px 50px rgba(0,0,0,.45);
+const STORAGE_KEY = "habit-tracker::v1";
+
+const $todayPill = document.getElementById("todayPill");
+const $scorePill = document.getElementById("scorePill");
+const $todayList = document.getElementById("todayList");
+const $weekTable = document.getElementById("weekTable");
+const $addForm = document.getElementById("addForm");
+const $habitName = document.getElementById("habitName");
+const $resetBtn = document.getElementById("resetBtn");
+const $exportBtn = document.getElementById("exportBtn");
+const $importBtn = document.getElementById("importBtn");
+const $fileInput = document.getElementById("fileInput");
+
+const todayKey = () => new Date().toISOString().slice(0, 10); // UTC date string
+// If you want LOCAL date keys instead, use:
+// const todayKey = () => {
+//   const d = new Date();
+//   const y = d.getFullYear();
+//   const m = String(d.getMonth()+1).padStart(2,"0");
+//   const day = String(d.getDate()).padStart(2,"0");
+//   return `${y}-${m}-${day}`;
+// };
+
+function load() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return { habits: [] };
+  try {
+    const data = JSON.parse(raw);
+    if (!data || !Array.isArray(data.habits)) return { habits: [] };
+    return data;
+  } catch {
+    return { habits: [] };
+  }
 }
 
-*{ box-sizing:border-box; }
-html,body{ height:100%; }
-body{
-  margin:0;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
-  background: radial-gradient(1200px 700px at 20% 10%, rgba(99,102,241,.18), transparent 60%),
-              radial-gradient(900px 700px at 80% 40%, rgba(16,185,129,.10), transparent 55%),
-              var(--bg);
-  color: var(--text);
+function save(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
-.wrap{
-  max-width: 880px;
-  margin: 0 auto;
-  padding: 28px 18px 40px;
+function uid() {
+  return Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
 }
 
-.top{
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-end;
-  gap:14px;
-  margin-bottom:18px;
+function lastNDays(n) {
+  const days = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i);
+    // local key:
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    days.push({ key: `${y}-${m}-${day}`, label: d.toLocaleDateString(undefined, { weekday: "short" }) });
+  }
+  return days;
 }
 
-h1{ margin:0; font-size: 28px; letter-spacing: .2px; }
-.sub{ margin:6px 0 0; color: var(--muted); }
-
-.controls{ display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
-
-.card{
-  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 18px 18px 14px;
-  box-shadow: var(--shadow);
+function isDone(habit, dayKey) {
+  return Boolean(habit.log && habit.log[dayKey] === true);
 }
 
-.meta{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  margin-bottom: 10px;
+function setDone(habit, dayKey, value) {
+  habit.log = habit.log || {};
+  habit.log[dayKey] = value === true;
 }
 
-.pill{
-  display:inline-flex;
-  align-items:center;
-  border: 1px solid var(--border);
-  border-radius:999px;
-  padding: 6px 10px;
-  font-size: 12px;
-  color: var(--muted);
+function calcStreak(habit, dayKey) {
+  // streak = consecutive true days ending at dayKey (today)
+  let streak = 0;
+  const d = new Date(dayKey + "T00:00:00");
+  while (true) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const key = `${y}-${m}-${day}`;
+    if (isDone(habit, key)) {
+      streak += 1;
+      d.setDate(d.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+  return streak;
 }
 
-.title{
-  margin: 8px 0 10px;
-  font-size: 22px;
+function completionScore(data, days) {
+  // score over last 7 days: checked boxes / total possible
+  const total = data.habits.length * days.length;
+  if (total === 0) return { checked: 0, total: 0, pct: 0 };
+  let checked = 0;
+  for (const h of data.habits) {
+    for (const d of days) if (isDone(h, d.key)) checked += 1;
+  }
+  return { checked, total, pct: Math.round((checked / total) * 100) };
 }
 
-.text{
-  margin: 0 0 14px;
-  line-height: 1.65;
-  color: rgba(255,255,255,.86);
+function render() {
+  const data = load();
+  const tKey = (() => {
+    // local key for UI display (matches week table)
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  })();
+
+  $todayPill.textContent = new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+
+  // Today list
+  $todayList.innerHTML = "";
+  if (data.habits.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "No habits yet. Add one below.";
+    $todayList.appendChild(empty);
+  } else {
+    for (const habit of data.habits) {
+      const item = document.createElement("div");
+      item.className = "item";
+
+      const left = document.createElement("div");
+      left.className = "left";
+
+      const box = document.createElement("div");
+      box.className = "checkbox" + (isDone(habit, tKey) ? " on" : "");
+      box.setAttribute("role", "checkbox");
+      box.setAttribute("aria-checked", String(isDone(habit, tKey)));
+      const mark = document.createElement("span");
+      mark.className = "checkmark";
+      mark.textContent = isDone(habit, tKey) ? "✓" : "";
+      box.appendChild(mark);
+
+      box.addEventListener("click", () => {
+        const data2 = load();
+        const h2 = data2.habits.find(h => h.id === habit.id);
+        const current = isDone(h2, tKey);
+        setDone(h2, tKey, !current);
+        save(data2);
+        render();
+      });
+
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = habit.name;
+
+      name.addEventListener("click", () => {
+        const next = prompt("Rename habit:", habit.name);
+        if (next === null) return;
+        const trimmed = next.trim();
+        if (!trimmed) return;
+        const data2 = load();
+        const h2 = data2.habits.find(h => h.id === habit.id);
+        h2.name = trimmed;
+        save(data2);
+        render();
+      });
+
+      left.appendChild(box);
+      left.appendChild(name);
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+
+      const streak = calcStreak(habit, tKey);
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = `🔥 ${streak} day${streak === 1 ? "" : "s"}`;
+
+      const kebab = document.createElement("button");
+      kebab.className = "kebab";
+      kebab.type = "button";
+      kebab.textContent = "⋯";
+      kebab.title = "Options";
+
+      kebab.addEventListener("click", () => {
+        const ok = confirm(`Delete "${habit.name}"? This removes its history.`);
+        if (!ok) return;
+        const data2 = load();
+        data2.habits = data2.habits.filter(h => h.id !== habit.id);
+        save(data2);
+        render();
+      });
+
+      meta.appendChild(badge);
+      meta.appendChild(kebab);
+
+      item.appendChild(left);
+      item.appendChild(meta);
+      $todayList.appendChild(item);
+    }
+  }
+
+  // 7-day view table
+  const days = lastNDays(7);
+  const score = completionScore(data, days);
+  $scorePill.textContent = `${score.checked}/${score.total} (${score.pct}%)`;
+
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+
+  const thHabit = document.createElement("th");
+  thHabit.textContent = "Habit";
+  headRow.appendChild(thHabit);
+
+  for (const d of days) {
+    const th = document.createElement("th");
+    th.textContent = d.label;
+    th.style.textAlign = "center";
+    headRow.appendChild(th);
+  }
+
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  for (const habit of data.habits) {
+    const tr = document.createElement("tr");
+
+    const tdName = document.createElement("td");
+    tdName.textContent = habit.name;
+    tr.appendChild(tdName);
+
+    for (const d of days) {
+      const td = document.createElement("td");
+      td.className = "center";
+
+      const dot = document.createElement("span");
+      dot.className = "dot" + (isDone(habit, d.key) ? " on" : "");
+      dot.title = `${habit.name} • ${d.key}`;
+      td.appendChild(dot);
+
+      // Toggle by clicking dot
+      td.addEventListener("click", () => {
+        const data2 = load();
+        const h2 = data2.habits.find(h => h.id === habit.id);
+        const current = isDone(h2, d.key);
+        setDone(h2, d.key, !current);
+        save(data2);
+        render();
+      });
+
+      tr.appendChild(td);
+    }
+
+    tbody.appendChild(tr);
+  }
+
+  table.appendChild(tbody);
+
+  $weekTable.innerHTML = "";
+  $weekTable.appendChild(table);
 }
 
-.choices{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-  margin-top: 12px;
-}
+// Add habit
+$addForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const name = $habitName.value.trim();
+  if (!name) return;
 
-.btn{
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,.06);
-  color: var(--text);
-  border-radius: 14px;
-  padding: 12px 12px;
-  cursor:pointer;
-  transition: transform .08s ease, background .2s ease, border-color .2s ease;
-  text-align:left;
-}
+  const data = load();
+  data.habits.unshift({
+    id: uid(),
+    name,
+    createdAt: new Date().toISOString(),
+    log: {}
+  });
+  save(data);
 
-.btn:hover{
-  background: rgba(255,255,255,.10);
-  border-color: rgba(255,255,255,.18);
-}
+  $habitName.value = "";
+  render();
+});
 
-.btn:active{ transform: translateY(1px); }
+// Reset
+$resetBtn.addEventListener("click", () => {
+  const ok = confirm("Reset everything? This deletes all habits and history.");
+  if (!ok) return;
+  localStorage.removeItem(STORAGE_KEY);
+  render();
+});
 
-.btn.primary{
-  background: rgba(99,102,241,.18);
-  border-color: rgba(99,102,241,.32);
-}
+// Export / Import
+$exportBtn.addEventListener("click", () => {
+  const data = load();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "habit-tracker-backup.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
 
-.btn.primary:hover{
-  background: rgba(99,102,241,.25);
-  border-color: rgba(99,102,241,.45);
-}
+$importBtn.addEventListener("click", () => $fileInput.click());
+$fileInput.addEventListener("change", async () => {
+  const file = $fileInput.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    if (!parsed || !Array.isArray(parsed.habits)) throw new Error("Invalid file format");
+    save(parsed);
+    render();
+  } catch (e) {
+    alert("Import failed: " + (e?.message || "unknown error"));
+  } finally {
+    $fileInput.value = "";
+  }
+});
 
-.btn.secondary{
-  padding: 10px 12px;
-  border-radius: 12px;
-}
-
-.footer{
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
-.bottom{
-  margin-top: 16px;
-  text-align:center;
-}
-
-.muted{ color: var(--muted); font-size: 13px; }
-
-@media (max-width:520px){
-  .top{ align-items:flex-start; flex-direction:column; }
-  .controls{ justify-content:flex-start; }
-}
+render();
