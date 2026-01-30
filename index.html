@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Choose Your Path</title>
+  <link rel="stylesheet" href="style.css" />
+  <meta name="description" content="An interactive choose-your-path story." />
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div>
+        <h1>Choose Your Path</h1>
+        <p class="sub">An interactive story you can host on GitHub Pages.</p>
+      </div>
+
+      <div class="controls">
+        <button id="restartBtn" class="btn secondary" type="button">Restart</button>
+        <button id="shareBtn" class="btn secondary" type="button">Copy Link</button>
+      </div>
+    </header>
+
+    <main class="card" aria-live="polite">
+      <div class="meta">
+        <span id="chapterPill" class="pill">Chapter</span>
+        <span id="progressText" class="muted">0 choices made</span>
+      </div>
+
+      <h2 id="title" class="title">Loading…</h2>
+      <p id="text" class="text"></p>
+
+      <div id="choices" class="choices" role="list"></div>
+
+      <div class="footer">
+        <span id="hint" class="muted">Tip: your progress is saved automatically.</span>
+      </div>
+    </main>
+
+    <footer class="bottom muted">
+      Built with plain HTML/CSS/JS • Host on GitHub Pages
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
